@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "npvpn-am-etl"
+version = "0.1.0"
+description = ""
+authors = ["Mikhail Valkhmenin <mvakhmenin@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.15"
+pandas = "^2.3.3"
+clickhouse-connect = "^0.10.0"
+
+
+[tool.poetry.group.dev.dependencies]
+python-dotenv = "^1.2.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
