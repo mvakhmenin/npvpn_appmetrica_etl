@@ -6,6 +6,7 @@ import clickhouse_connect
 from clickhouse_connect.driver.client import Client
 
 from utils import get_logger
+from config import appmetrica_ch_tables
 
 class ClickHouseConnector:
     """Коннектор для ClickHouse с использованием clickhouse-connect"""
@@ -75,7 +76,7 @@ class ClickHouseConnector:
                 
         except Exception as e:
             self.logger.error(f"Ошибка подключения к ClickHouse: {e}")
-            self.client = None
+            self.disconnect()
             return False
     
     def disconnect(self):
@@ -114,23 +115,58 @@ class ClickHouseConnector:
             self.logger.error(f"Ошибка выполнения запроса: {e}")
             raise
     
+    def get_target_max_date(self, target: str):
+        """
+        Получение максимальной даты данных в источнике (installations или events)
+        Необходмо для последующего запроса актуальных данных из App Metrica 
+
+        Args:
+            target: источник (installations или events)
+
+        Returns:
+            Дата в формате datetime.datetime
+        
+        """
+        target_table = appmetrica_ch_tables[target]['table_name']
+        date_time_field = appmetrica_ch_tables[target]['date_time_field']
+
+        target_max_date_sql = f"""
+                SELECT MAX({date_time_field})
+                FROM {target_table}
+            """
+        self.logger.info(f"Получаю MAX {date_time_field} из таблицы {target_table}")
+        sql_res = self.execute_query(target_max_date_sql, return_df=False)
+        max_date = list(sql_res[0].values())[0]
+        self.logger.info(f"MAX {date_time_field} из таблицы {target_table}: {max_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        return max_date
+
+    def insert_source_data(self,
+                           source_name: str,
+                           df: pd.DataFrame,
+                         ):
+        """
+        Docstring for insert_source_data
+        
+        :param self: Description
+        :param source_name: Description
+        :type source_name: str
+        :param df: Description
+        :type df: pd.DataFrame
+        """
+        table_name = appmetrica_ch_tables[source_name]['table_name']
+        self.insert_dataframe(table_name, df)
+        return
+
     def insert_dataframe(self, 
                          table_name: str, 
                          df: pd.DataFrame,
-                         database: Optional[str] = None,
-                         column_names: Optional[List[str]] = None,
-                         settings: Optional[Dict] = None,
-                         **kwargs):
+                         ):
         """
         Вставка данных из DataFrame в таблицу ClickHouse
         
         Args:
             table_name: Имя таблицы
             df: DataFrame с данными
-            database: Имя базы данных (если None, используется self.database)
-            column_names: Имена колонок для вставки (если None, используются все колонки DataFrame)
-            settings: Дополнительные настройки для вставки
-            **kwargs: Дополнительные аргументы для client.insert_df()
         """
         if not self.client:
             raise ConnectionError("Сначала выполните подключение через метод connect()")
@@ -143,30 +179,21 @@ class ClickHouseConnector:
             # Подготовка данных - обработка типов
             df_prepared = self._prepare_dataframe(df)
             
-            # Определяем имена колонок
-            if column_names is None:
-                column_names = list(df_prepared.columns)
-            
-            # Определяем базу данных
-            target_database = database or self.database
-            full_table_name = f"{target_database}.{table_name}" if target_database else table_name
-            
             # Вставляем данные
-            self.client.insert_df(table=full_table_name, 
-                                  df=df_prepared, 
-                                  column_names=column_names,
-                                  settings=settings,
-                                  **kwargs)
+            self.client.insert_df(table=table_name, 
+                                  df=df_prepared
+                                  )
             
-            self.logger.info(f"Успешно вставлено {len(df_prepared)} строк в таблицу {full_table_name}")
+            self.logger.info(f"Успешно вставлено {len(df)} строк в таблицу {table_name}")
             
         except Exception as e:
-            self.logger.error(f"Ошибка вставки данных: {e}")
+            self.logger.error(f"Ошибка вставки данных в таблицу {table_name}: {e}")
             raise
     
     def _prepare_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Подготовка DataFrame для вставки в ClickHouse
+        Подготовка DataFrame для вставки в ClickHouse 
+                -- преобразование типов в соответствии с целевой таблицей Clickhouse
         
         Args:
             df: Исходный DataFrame
@@ -176,19 +203,33 @@ class ClickHouseConnector:
         """
         df_prepared = df.copy()
         
-        # Обработка типов данных
+        int_columns = ['application_id', 
+                       'click_timestamp',
+                       'tracking_id',
+                       'install_receive_timestamp',
+                       'mcc',
+                       'mnc',
+                       'event_receive_timestamp',
+                       'event_timestamp',
+                       'app_build_number']
+        datetime_columns = ['click_datetime',
+                            'install_datetime',
+                            'install_receive_datetime',
+                            'event_datetime',
+                            'event_receive_datetime']
+        bool_columns = ['is_reattribution', 
+                        'is_reinstallation']
+
         for col in df_prepared.columns:
-            # Преобразование datetime64[ns] в datetime
-            if pd.api.types.is_datetime64_any_dtype(df_prepared[col]):
-                # Конвертируем в timezone-naive datetime
-                df_prepared[col] = pd.to_datetime(df_prepared[col]).dt.tz_localize(None)
-            
-            # Замена бесконечных значений на None
-            if pd.api.types.is_float_dtype(df_prepared[col]):
-                df_prepared[col] = df_prepared[col].replace([np.inf, -np.inf], None)
-            
-            # Замена NaN на None (для корректной вставки NULL)
-            df_prepared[col] = df_prepared[col].where(pd.notnull(df_prepared[col]), None)
+            if col in int_columns:
+                df_prepared[col] = df_prepared[col].astype(int)
+            elif col in datetime_columns:
+                df_prepared[col] = pd.to_datetime(df_prepared[col], format='%Y-%m-%d %H:%M:%S')
+            elif col in bool_columns:
+                df_prepared[col] = df_prepared[col].map({
+                                    'true': 1,
+                                    'false': 0
+                                }).fillna(0).astype(bool)
         
         return df_prepared
     
