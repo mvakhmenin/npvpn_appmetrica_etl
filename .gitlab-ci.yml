@@ -1,0 +1,14 @@
+stages:
+  - run
+
+daily-appmetrica-etlt:
+  stage: run
+  image: python:3.12 
+  script:
+    - pip install -r requirements.txt
+    - python appmetrica_etl.py
+  only:
+    - schedules  # запускать только по расписанию
+  # Можно добавить правила для конкретного расписания:
+  # rules:
+  #   - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_NAME == "Daily Run"
