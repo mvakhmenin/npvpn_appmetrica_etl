@@ -18,7 +18,7 @@ class ClickHouseConnector:
                  password: str,
                  secure: bool = True,
                  verify: bool = False,
-                 ca_cert='ca.crt',
+                 ca_cert='ca_crt',
                  compress: bool = True,
                  log_level: int = logging.WARNING):
         """
