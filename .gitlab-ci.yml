@@ -2,7 +2,7 @@ stages:
   - build
 
 daily-appmetrica-etlt:
-  stage: run
+  stage: build
   image: python:3.12 
   script:
     - pip install -r requirements.txt
