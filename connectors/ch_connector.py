@@ -72,10 +72,10 @@ class ClickHouseConnector:
                 self.logger.info(f"Успешное подключение к ClickHouse {self.host}:{self.port}")
                 return True
             else:
-                raise ConnectionError("Не удалось проверить подключение")
+                raise ConnectionError(f"Не удалось проверить подключение к ClickHouse {self.host}:{self.port}")
                 
         except Exception as e:
-            self.logger.error(f"Ошибка подключения к ClickHouse: {e}")
+            self.logger.error(f"Ошибка подключения к ClickHouse {self.host}:{self.port}: {e}")
             self.disconnect()
             return False
     
@@ -84,7 +84,7 @@ class ClickHouseConnector:
         if self.client:
             self.client.close()
             self.client = None
-            self.logger.info("Подключение к ClickHouse закрыто")
+            self.logger.info(f"Подключение закрыто к ClickHouse {self.host}:{self.port}")
     
     def execute_query(self, 
                       query: str, 
@@ -112,7 +112,7 @@ class ClickHouseConnector:
             return result
                 
         except Exception as e:
-            self.logger.error(f"Ошибка выполнения запроса: {e}")
+            self.logger.error(f"Ошибка выполнения запроса {query=}: {e}")
             raise
     
     def get_target_max_date(self, target: str):
@@ -239,7 +239,12 @@ class ClickHouseConnector:
             if not self.client:
                 return False
             result = self.client.query("SELECT 1 as test")
-            return bool(result and result.first_row[0] == 1)
+            if bool(result and result.first_row[0] == 1):
+                self.logger.info(f"Успешная проверка соединения: {self.host}:{self.port}")
+                return True
+            else:
+                self.logger.error(f"Ошибка проверки соединения с Clickhouse: {self.host}:{self.port}. Реузльтат: {result.first_row[0]}")
+                return False
         except Exception as e:
             self.logger.error(f"Ошибка проверки соединения: {e}")
             return False

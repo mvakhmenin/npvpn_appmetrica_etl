@@ -2,10 +2,10 @@ import requests
 import logging
 from datetime import datetime, timedelta
 import time
-from typing import Optional, Union, List, Dict
+from typing import Union, List, Dict
 
 from utils import get_logger
-from config import app_ids, appmetrica_endpoints, appmetrica_fields
+from config import appmetrica_endpoints, appmetrica_fields
 
 
 class AppMetricaConnector:
@@ -45,14 +45,15 @@ class AppMetricaConnector:
     def get_source_data(self, 
                         source: str, 
                         app: str,
-                        date_from: datetime):
+                        date_from: datetime) -> Dict:
         """
         Получение актуальных данных из App Metrica
         """
         result_data = None
         if self._request_source_data(source, app, date_from):
             result_data = self._get_data_from_source()
-        return result_data['data']
+            result_data = result_data['data']
+        return result_data
 
     def _request_source_data(self, 
                             source: str, 
@@ -71,11 +72,17 @@ class AppMetricaConnector:
         :type date_from: datetime
         """
         
-        date_from = date_from.strftime('%Y-%m-%d %H:%M:%S')
+        
 
         date_until = datetime.now()
         date_until = date_until.replace(hour=0, minute=0, second=0, microsecond=0)
         date_until = date_until - timedelta(seconds=1)
+
+        if date_from >= date_until:
+            self.logger.warning(f"Новые данные отсуствуют в App Metrica (приложение {app}, тип {source}, период с {date_from} по {date_until})")
+            return False
+
+        date_from = date_from.strftime('%Y-%m-%d %H:%M:%S')
         date_until = date_until.strftime('%Y-%m-%d %H:%M:%S')
 
         self.params = {
