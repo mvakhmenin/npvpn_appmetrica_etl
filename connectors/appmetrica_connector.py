@@ -52,7 +52,8 @@ class AppMetricaConnector:
         result_data = None
         if self._request_source_data(source, app, date_from):
             result_data = self._get_data_from_source()
-            result_data = result_data['data']
+            if result_data:
+                result_data = result_data['data']
         return result_data
 
     def _request_source_data(self, 
@@ -133,5 +134,7 @@ class AppMetricaConnector:
             else:
                 self.logger.error(f"Ошибка при отправке запроса: {response.status_code=}, {response.text}")
                 return False
-        raise TimeoutError(f'Ошибка при получении данных из App Metrica: данные не поступили за {n_retries * wait_s} сек.')
+        self.logger.error(f'Ошибка при получении данных из App Metrica: данные не поступили за {n_retries * wait_s} сек.')
+        return False
+        
 
