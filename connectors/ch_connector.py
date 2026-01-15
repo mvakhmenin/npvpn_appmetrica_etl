@@ -137,6 +137,7 @@ class ClickHouseConnector:
         self.logger.info(f"Получаю MAX {date_time_field} из таблицы {target_table}")
         sql_res = self.execute_query(target_max_date_sql, return_df=False)
         max_date = list(sql_res[0].values())[0]
+        max_date = max_date.replace(tzinfo=None)
         self.logger.info(f"MAX {date_time_field} из таблицы {target_table}: {max_date.strftime('%Y-%m-%d %H:%M:%S')}")
         return max_date
 
