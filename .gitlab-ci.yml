@@ -11,6 +11,3 @@ daily-appmetrica-etlt:
     - python appmetrica_etl.py
   only:
     - schedules  # запускать только по расписанию
-  # Можно добавить правила для конкретного расписания:
-  # rules:
-  #   - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_NAME == "Daily Run"
